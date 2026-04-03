@@ -205,12 +205,50 @@ def should_skip_file(fname):
         return False
     return True
 
+_SUFFIX_MAP = {
+    '삼계': {'잔': '잔삼계', '소': '소삼계', '대': '대삼계', '중': '중삼계'},
+    '난발': {'잔': '잔난', '소': '소난', '대': '대난', '중': '중난', '특': '특난', '왕': '왕난', '콩': '콩난'},
+}
+
+def _detect_group_context(parts):
+    for p in parts:
+        cat = get_category(p)
+        if cat in ('삼계', '난발', '황다마'):
+            return cat
+        if p.endswith('삼계'): return '삼계'
+        if p.endswith('난'): return '난발'
+    return None
+
+def expand_combined_item(name, price):
+    """복합 품목을 개별 품목으로 분해. 문맥 인식 확장."""
+    if '+' not in name:
+        return [(name, price)]
+    parts = [p.strip() for p in name.split('+')]
+    results = []
+    has_hwang_prefix = parts[0].startswith('황') if parts else False
+    ctx = _detect_group_context(parts)
+    for part in parts:
+        if not part: continue
+        resolved = part
+        if has_hwang_prefix and not part.startswith('황'):
+            hwang_ver = '황' + part
+            if hwang_ver in item_to_cat:
+                resolved = hwang_ver
+        if get_category(resolved) is None and ctx in _SUFFIX_MAP:
+            expanded = _SUFFIX_MAP[ctx].get(resolved)
+            if expanded and get_category(expanded):
+                resolved = expanded
+        cat = get_category(resolved)
+        if cat:
+            results.append((resolved, price))
+    return results if results else [(name, price)]
+
 def build_data(csv_folder):
     raw = defaultdict(lambda: defaultdict(list))
     cats = defaultdict(lambda: defaultdict(list))
     count = 0
     skipped_no_date = 0
-    format_stats = defaultdict(int)   # item_col 분포 추적
+    format_stats = defaultdict(int)
 
     for root, dirs, files in os.walk(csv_folder):
         for f in files:
@@ -243,12 +281,15 @@ def build_data(csv_folder):
 
             prices = parse_csv(fpath)
             for item, price in prices.items():
-                cat = get_category(item)
-                if not cat:
-                    continue
-                raw[date][item].append(int(price))
-                cats[date][cat].append(int(price))
-                count += 1
+                # 복합 품목 분해: 각 개별 품목에 동일 단가 적용
+                expanded = expand_combined_item(item, price)
+                for sub_item, sub_price in expanded:
+                    cat = get_category(sub_item)
+                    if not cat:
+                        continue
+                    raw[date][sub_item].append(int(sub_price))
+                    cats[date][cat].append(int(sub_price))
+                    count += 1
 
     avg = lambda lst: round(statistics.mean(lst)) if lst else None
 

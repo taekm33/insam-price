@@ -252,8 +252,8 @@ footer{text-align:center;padding:18px;color:var(--text3);font-size:.7rem;border-
 
 </div><!-- /content -->
 <footer>
-  인삼 단가 분석 대시보드 · 2015~2026 판매장부 기반 · 6,084건 CSV 처리 (정산 파일 제외)<br>
-  <span id="ftUpdated"></span> · 새 파일 추가 후 <code>데이터_업데이트.py</code> 실행 → 새로고침
+  인삼 단가 분석 대시보드 · 데이터 로딩 중...<br>
+  <span id="ftUpdated"></span>
 </footer>
 
 <script>
@@ -263,7 +263,8 @@ const BUILTIN = {"categories":{"원삼":{"monthly":{"2015-03":32548,"2015-04":31
 
 const CC = {원삼:'#3b82f6',삼계:'#22c55e',난발:'#f59e0b',황다마:'#ef4444',잡삼:'#a855f7',기타:'#06b6d4'};
 const CATS = ['원삼','삼계','난발','황다마','잡삼','기타'];
-const YRS = ['2015','2016','2017','2018','2019','2020','2022','2023','2024','2025','2026'];
+// YRS는 init()에서 데이터 기반으로 동적 설정
+let YRS = ['2015','2016','2017','2018','2019','2020','2022','2023','2024','2025','2026'];
 const PALETTE = ['#3b82f6','#22c55e','#f59e0b','#ef4444','#a855f7','#06b6d4','#f97316','#ec4899','#84cc16','#14b8a6','#8b5cf6','#fb923c'];
 
 let RAW = BUILTIN;
@@ -315,12 +316,12 @@ Chart.defaults.borderColor = '#334155';
 Chart.defaults.font.family = "-apple-system,'Noto Sans KR',sans-serif";
 
 const STDPREF = {
-  원삼:['왕왕왕대','왕왕대','왕대','별별대','별대','특대','대','중','소','믹서','믹사'],
+  원삼:['마편','별별대','별대','왕왕왕대','왕왕대','왕대','특대','대','중','소','믹서','믹사'],
   삼계:['대삼계','중삼계','소삼계','소삼계1','소삼계2','잔삼계','실실이','잔잔이','짠짠이'],
-  난발:['별별난','별난','왕왕난','왕난','특난','대난','중난','소난','잔난','콩난','콩콩난','콩콩콩난','콩3난','콩4난','콩5난'],
-  황다마:['황왕왕대','황왕대','황특대','황대','황중','황소','황믹서','황믹사','황삼계','황난','황대난','황특난','황중난'],
-  잡삼:['파삼','파','깍기','막삼','흠서리','썩삼','절삼','중미','동가리','대동가리','중동가리','소동가리','잔동가리'],
-  기타:['묘삼','묘파','달랭이','세근파','은피']
+  난발:['별별난','별난','왕왕왕난','왕왕난','왕난','특난','대난','중난','소난','잔난','콩난','콩콩난','콩콩콩난','콩3난','콩4난','콩5난','콩6난'],
+  황다마:['황별대','황왕왕대','황왕대','황특대','황대','황중','황소','황믹서','황믹사','황삼계','황난','황대난','황특난','황중난','황왕난','황소난','황대삼계','황'],
+  잡삼:['파삼','파','깍기','대깍기','막삼','흠서리','썩삼','절삼','중미','미삼','동가리','대동가리','중동가리','소동가리','잔동가리','특동가리','왕동가리'],
+  기타:['묘삼','묘파','달랭이','세근파','세근','제무기','재무기','은피']
 };
 
 function getItemsForCat(cat) {
@@ -774,6 +775,35 @@ function buildPredTable() {
 
 // ========================= INIT =========================
 function init() {
+  // 데이터에서 연도 목록 동적 생성
+  const yrSet = new Set();
+  for(const cat of CATS) {
+    const an = RAW.categories[cat]?.annual || {};
+    Object.keys(an).forEach(y => yrSet.add(y));
+  }
+  YRS = [...yrSet].sort();
+
+  // 연도 드롭다운 동적 업데이트
+  const yrSel = document.getElementById('yrSel');
+  if(yrSel) {
+    yrSel.innerHTML = '';
+    YRS.forEach(y => {
+      const o = document.createElement('option');
+      o.value = o.textContent = y;
+      if(y === YRS[YRS.length-1]) o.selected = true;
+      yrSel.appendChild(o);
+    });
+  }
+
+  // Footer 통계 동적 업데이트
+  const totalItems = Object.keys(RAW.items).length;
+  const yrRange = YRS.length ? YRS[0]+'~'+YRS[YRS.length-1] : '';
+  const ftEl = document.querySelector('footer');
+  if(ftEl) {
+    ftEl.innerHTML = `인삼 단가 분석 대시보드 · ${yrRange} 판매장부 기반 · ${totalItems}개 품목 추적<br>` +
+      `<span id="ftUpdated">데이터 업데이트: ${RAW.updated||'N/A'}</span> · 새 파일 추가 후 전체_자동화.command 실행 → 자동 반영`;
+  }
+
   document.getElementById('loadingOverlay').style.display='none';
   renderOv();
   renderStats();
